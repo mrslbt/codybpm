@@ -145,7 +145,7 @@ function App() {
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
   const [currentBeat, setCurrentBeat] = useState(-1)
   const [measureInCycle, setMeasureInCycle] = useState(0)
-  const [totalMeasures, setTotalMeasures] = useState(0)
+  const [_totalMeasures, setTotalMeasures] = useState(0)
   const [speakerPattern, setSpeakerPattern] = useState<number[]>(PIXEL_ICONS[0])
   const [speakerFlash, setSpeakerFlash] = useState(false)
 
