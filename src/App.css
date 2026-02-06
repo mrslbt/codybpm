@@ -548,16 +548,10 @@
   }
 
   .speaker {
-    height: 130px;
+    height: 150px;
   }
 
   .speaker-dots {
-    inset: 6px 8px;
-    gap: 1px;
-  }
-
-  .speaker-dot {
-    aspect-ratio: auto;
-    height: 100%;
+    inset: 8px 10px;
   }
 }
