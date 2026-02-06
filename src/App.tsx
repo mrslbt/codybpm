@@ -188,8 +188,8 @@ function App() {
     }
     ctx.stroke()
 
-    if (!isPlayingRef.current || isPausedRef.current) {
-      // Draw flatline when stopped/paused
+    if (!isPlayingRef.current && !isPausedRef.current) {
+      // Draw flatline only when fully stopped
       const baseY = h * 0.55
       ctx.strokeStyle = 'rgba(255, 58, 58, 0.15)'
       ctx.lineWidth = dpr * 1.5
