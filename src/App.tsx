@@ -46,6 +46,45 @@ function generateECGCycle(numPoints: number): number[] {
 
 const ECG_CYCLE = generateECGCycle(200)
 
+// Per-beat variation parameters
+interface BeatVariation {
+  ampScale: number    // 0.85–1.15 multiplier on overall amplitude
+  rPeakScale: number  // 0.9–1.1 multiplier on R peak specifically
+  tWaveScale: number  // 0.8–1.2 multiplier on T wave
+  baselineOff: number // small vertical offset (-0.03 to 0.03)
+  timeStretch: number // 0.97–1.03 slight timing variation
+}
+
+function randomBeatVariation(): BeatVariation {
+  return {
+    ampScale: 0.85 + Math.random() * 0.30,
+    rPeakScale: 0.9 + Math.random() * 0.20,
+    tWaveScale: 0.8 + Math.random() * 0.40,
+    baselineOff: (Math.random() - 0.5) * 0.06,
+    timeStretch: 0.97 + Math.random() * 0.06,
+  }
+}
+
+// Sample the ECG cycle with per-beat variation applied
+function sampleECGWithVariation(t: number, v: BeatVariation): number {
+  const ts = Math.min(Math.max(t / v.timeStretch, 0), 0.9999)
+  const idx = Math.floor(ts * ECG_CYCLE.length) % ECG_CYCLE.length
+  let val = ECG_CYCLE[idx]
+
+  // Apply variation based on which part of the waveform we're in
+  if (ts > 0.30 && ts < 0.46) {
+    // QRS complex region — scale R peak
+    val *= v.ampScale * v.rPeakScale
+  } else if (ts > 0.50 && ts < 0.74) {
+    // T wave region
+    val *= v.ampScale * v.tWaveScale
+  } else {
+    val *= v.ampScale
+  }
+
+  return val + v.baselineOff
+}
+
 function App() {
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
@@ -76,6 +115,24 @@ function App() {
   const wavePhaseRef = useRef(0)
   const animFrameRef = useRef<number | null>(null)
   const lastFrameTimeRef = useRef(0)
+  // Beat variation: store variations keyed by cycle index
+  const beatVarsRef = useRef<Map<number, BeatVariation>>(new Map())
+  const baselineWanderRef = useRef(0)
+  const baselineWanderVelRef = useRef(0)
+
+  const getVariation = useCallback((cycleIndex: number): BeatVariation => {
+    const map = beatVarsRef.current
+    if (!map.has(cycleIndex)) {
+      map.set(cycleIndex, randomBeatVariation())
+      // Prune old entries to prevent memory leak (keep last 20 cycles)
+      if (map.size > 20) {
+        const oldest = Math.min(...map.keys())
+        map.delete(oldest)
+      }
+    }
+    return map.get(cycleIndex)!
+  }, [])
+
   const drawECG = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -144,65 +201,70 @@ function App() {
     }
 
     const phase = wavePhaseRef.current
-    const cycleLen = ECG_CYCLE.length
     const baseY = h * 0.55
     const amplitude = h * 0.38
     const totalPoints = Math.floor(w)
 
-    // Phosphor trail: draw the full waveform with fading trail behind the sweep cursor
+    // Baseline wander — slow drift
+    baselineWanderVelRef.current += (Math.random() - 0.5) * 0.0003
+    baselineWanderVelRef.current *= 0.995 // damping
+    baselineWanderRef.current += baselineWanderVelRef.current
+    baselineWanderRef.current = Math.max(-0.04, Math.min(0.04, baselineWanderRef.current))
+    const wander = baselineWanderRef.current * h
+
+    // Helper to get ECG value at a given absolute phase position
+    const getVal = (absPhase: number): number => {
+      const cycleIndex = Math.floor(absPhase / totalPoints)
+      const withinCycle = ((absPhase % totalPoints) + totalPoints) % totalPoints
+      const t = withinCycle / totalPoints
+      const variation = getVariation(cycleIndex)
+      return sampleECGWithVariation(t, variation)
+    }
+
+    // Phosphor trail
     const sweepX = (phase % totalPoints)
 
     // Draw the waveform trace with phosphor afterglow
     for (let pass = 0; pass < 2; pass++) {
-      // Pass 0: glow, Pass 1: core line
       ctx.beginPath()
       let started = false
 
       for (let px = 0; px < totalPoints; px++) {
-        // How far behind the sweep cursor is this pixel?
         let age = sweepX - px
         if (age < 0) age += totalPoints
 
-        // Only draw pixels that have been "written" (behind the cursor)
-        // and within the trail length
         const trailLength = totalPoints * 0.85
         if (age > trailLength) continue
 
-        // Fade based on age
         const fadeFactor = 1.0 - (age / trailLength)
-        const alpha = fadeFactor * fadeFactor // quadratic fade for phosphor feel
+        const alpha = fadeFactor * fadeFactor
 
-        // Get the ECG value at this position
-        const waveIdx = Math.floor((phase - (sweepX - px) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
-        const val = ECG_CYCLE[waveIdx]
-        const y = baseY + val * amplitude
+        const absPhase = phase - age
+        const val = getVal(absPhase)
+        const y = baseY + val * amplitude + wander
 
         if (pass === 0) {
-          // Glow pass — draw segments with varying alpha
           if (!started) {
             ctx.moveTo(px, y)
             started = true
           }
-          // Draw glow segments individually for alpha variation
           ctx.strokeStyle = `rgba(255, 58, 58, ${alpha * 0.3})`
           ctx.lineWidth = dpr * 6
           ctx.beginPath()
           ctx.moveTo(px, y)
-          // Look ahead one pixel
           const nextPx = px + 1
           if (nextPx < totalPoints) {
             let nextAge = sweepX - nextPx
             if (nextAge < 0) nextAge += totalPoints
             if (nextAge <= trailLength) {
-              const nextWaveIdx = Math.floor((phase - (sweepX - nextPx) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
-              const nextVal = ECG_CYCLE[nextWaveIdx]
-              const nextY = baseY + nextVal * amplitude
+              const nextAbsPhase = phase - nextAge
+              const nextVal = getVal(nextAbsPhase)
+              const nextY = baseY + nextVal * amplitude + wander
               ctx.lineTo(nextPx, nextY)
             }
           }
           ctx.stroke()
         } else {
-          // Core line pass
           ctx.strokeStyle = `rgba(255, 68, 58, ${alpha * 0.9})`
           ctx.lineWidth = dpr * 2
           ctx.beginPath()
@@ -212,9 +274,9 @@ function App() {
             let nextAge = sweepX - nextPx
             if (nextAge < 0) nextAge += totalPoints
             if (nextAge <= trailLength) {
-              const nextWaveIdx = Math.floor((phase - (sweepX - nextPx) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
-              const nextVal = ECG_CYCLE[nextWaveIdx]
-              const nextY = baseY + nextVal * amplitude
+              const nextAbsPhase = phase - nextAge
+              const nextVal = getVal(nextAbsPhase)
+              const nextY = baseY + nextVal * amplitude + wander
               ctx.lineTo(nextPx, nextY)
             }
           }
@@ -224,8 +286,8 @@ function App() {
     }
 
     // Bright dot at the sweep cursor position
-    const cursorWaveIdx = Math.floor(phase * (cycleLen / totalPoints)) % cycleLen
-    const cursorY = baseY + ECG_CYCLE[cursorWaveIdx] * amplitude
+    const cursorVal = getVal(phase)
+    const cursorY = baseY + cursorVal * amplitude + wander
     const cursorX = sweepX
 
     // Outer glow
@@ -255,7 +317,7 @@ function App() {
     gapGradient.addColorStop(1, 'rgba(17, 17, 20, 0)')
     ctx.fillStyle = gapGradient
     ctx.fillRect(cursorX, 0, gapWidth, h)
-  }, [])
+  }, [getVariation])
 
   const animateWaveform = useCallback(() => {
     if (!isPlayingRef.current || isPausedRef.current) return
@@ -281,6 +343,9 @@ function App() {
   const startWaveform = useCallback(() => {
     wavePhaseRef.current = 0
     lastFrameTimeRef.current = performance.now()
+    beatVarsRef.current.clear()
+    baselineWanderRef.current = 0
+    baselineWanderVelRef.current = 0
     animateWaveform()
   }, [animateWaveform])
 
