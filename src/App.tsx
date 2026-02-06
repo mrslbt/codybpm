@@ -12,10 +12,15 @@ const MEASURES_PER_BUMP = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
 
-// 24x16 pixel art icons — high-res, symmetrical fill
+// Desktop: 24x16 pixel art icons — high-res, symmetrical fill
 const COLS = 24
 const ROWS = 16
 const TOTAL_DOTS = COLS * ROWS
+
+// Mobile: 16x10 pixel art icons — compact, no clipping
+const COLS_MOBILE = 16
+const ROWS_MOBILE = 10
+const TOTAL_DOTS_MOBILE = COLS_MOBILE * ROWS_MOBILE
 
 // prettier-ignore
 const PIXEL_ICONS: number[][] = [
@@ -136,7 +141,100 @@ const PIXEL_ICONS: number[][] = [
   ],
 ]
 
+// prettier-ignore
+const PIXEL_ICONS_MOBILE: number[][] = [
+  // 1. Smiley 😊 — 16x10
+  [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,1,0,0,1,1,1,1,0,0,1,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,1,0,1,1,1,1,1,1,0,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+  // 2. Heart ❤️ — 16x10
+  [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,
+    0,0,1,1,1,1,0,0,1,1,1,1,0,0,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+  // 3. Lightning ⚡ — 16x10
+  [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+  // 4. Star ⭐ — 16x10
+  [
+    0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+  // 5. Sparkle ✨ — 16x10
+  [
+    0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,0,1,0,1,1,1,1,0,1,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,1,0,1,1,1,1,0,1,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+  // 6. Skull 💀 — 16x10
+  [
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,
+    0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,
+    0,0,0,0,1,1,1,0,0,1,1,1,0,0,0,0,
+    0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,0,1,0,1,1,0,1,0,0,0,0,0,
+    0,0,0,0,0,1,0,1,1,0,1,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  ],
+]
+
 function App() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 440px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 440px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  const icons = isMobile ? PIXEL_ICONS_MOBILE : PIXEL_ICONS
+  const totalDots = isMobile ? TOTAL_DOTS_MOBILE : TOTAL_DOTS
+
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
   const [selectedIncrement, setSelectedIncrement] = useState(1) // default B (+10)
@@ -146,7 +244,7 @@ function App() {
   const [currentBeat, setCurrentBeat] = useState(-1)
   const [measureInCycle, setMeasureInCycle] = useState(0)
   const [_totalMeasures, setTotalMeasures] = useState(0)
-  const [speakerPattern, setSpeakerPattern] = useState<number[]>(PIXEL_ICONS[0])
+  const [speakerPattern, setSpeakerPattern] = useState<number[]>(icons[0])
   const [speakerFlash, setSpeakerFlash] = useState(false)
 
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -161,6 +259,7 @@ function App() {
   const incrementRef = useRef(INCREMENTS[1].value)
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
+  useEffect(() => { if (!isPlayingRef.current) setSpeakerPattern(icons[0]) }, [icons])
 
   const playClick = useCallback((time: number, isDownbeat: boolean) => {
     const ctx = audioCtxRef.current
@@ -180,16 +279,16 @@ function App() {
 
   const activateSpeakerDots = useCallback((isDownbeat: boolean) => {
     if (isDownbeat) {
-      let next = Math.floor(Math.random() * PIXEL_ICONS.length)
-      while (next === lastIconRef.current && PIXEL_ICONS.length > 1) {
-        next = Math.floor(Math.random() * PIXEL_ICONS.length)
+      let next = Math.floor(Math.random() * icons.length)
+      while (next === lastIconRef.current && icons.length > 1) {
+        next = Math.floor(Math.random() * icons.length)
       }
       lastIconRef.current = next
-      setSpeakerPattern(PIXEL_ICONS[next])
+      setSpeakerPattern(icons[next])
     }
     setSpeakerFlash(true)
     setTimeout(() => setSpeakerFlash(false), 100)
-  }, [])
+  }, [icons])
 
   const scheduleNote = useCallback(() => {
     const ctx = audioCtxRef.current
@@ -310,9 +409,9 @@ function App() {
     setTotalMeasures(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
-    setSpeakerPattern(PIXEL_ICONS[0])
+    setSpeakerPattern(icons[0])
     setSpeakerFlash(false)
-  }, [startBpmInput])
+  }, [startBpmInput, icons])
 
   useEffect(() => {
     return () => {
@@ -333,8 +432,8 @@ function App() {
     <div className="device">
       {/* Speaker Grille */}
       <div className={`speaker ${isPlaying && !isPaused ? 'active' : ''}`}>
-        <div className="speaker-dots">
-          {Array.from({ length: TOTAL_DOTS }, (_, i) => (
+        <div className={`speaker-dots ${isMobile ? 'mobile' : ''}`}>
+          {Array.from({ length: totalDots }, (_, i) => (
             <div
               key={i}
               className={`speaker-dot ${speakerPattern[i] ? 'lit' : ''} ${speakerPattern[i] && speakerFlash ? 'flash' : ''}`}

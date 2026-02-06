@@ -551,7 +551,8 @@
     height: 150px;
   }
 
-  .speaker-dots {
-    inset: 8px 10px;
+  .speaker-dots.mobile {
+    grid-template-columns: repeat(16, 1fr);
+    grid-template-rows: repeat(10, 1fr);
   }
 }
