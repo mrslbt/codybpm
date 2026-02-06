@@ -29,7 +29,7 @@
 /* ===== SPEAKER GRILLE ===== */
 .speaker {
   width: 100%;
-  aspect-ratio: 24 / 12;
+  height: 220px;
   background: #111114;
   border-radius: 16px;
   margin-bottom: 14px;
@@ -68,7 +68,7 @@
 
 .speaker-dot {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1;
   background: #1a1a1e;
   border-radius: 50%;
   transition: all 0.1s ease;
@@ -538,13 +538,20 @@
 /* ===== RESPONSIVE ===== */
 @media (max-width: 440px) {
   .device {
-    width: calc(100vw - 32px);
-    max-width: 400px;
+    width: 340px;
     padding: 20px 18px 22px;
     border-radius: 28px;
   }
 
   .bpm-value {
     font-size: 52px;
+  }
+
+  .speaker {
+    height: 150px;
+  }
+
+  .speaker-dots {
+    inset: 8px 10px;
   }
 }
