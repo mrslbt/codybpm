@@ -56,34 +56,12 @@
   z-index: 1;
 }
 
-.speaker-dots {
+.ecg-canvas {
   position: absolute;
-  inset: 8px 10px;
-  display: grid;
-  grid-template-columns: repeat(24, 1fr);
-  grid-template-rows: repeat(16, 1fr);
-  gap: 1.5px;
-  z-index: 0;
-}
-
-.speaker-dot {
+  inset: 0;
   width: 100%;
-  aspect-ratio: 1;
-  background: #1a1a1e;
-  border-radius: 50%;
-  transition: all 0.1s ease;
-}
-
-/* ECG waveform dot — baseline trace */
-.speaker-dot.wave {
-  background: #ff3a3a;
-  box-shadow: 0 0 3px rgba(255, 58, 58, 0.4);
-}
-
-/* ECG waveform dot — QRS spike (brighter) */
-.speaker-dot.wave.spike {
-  background: #ff5544;
-  box-shadow: 0 0 8px rgba(255, 58, 58, 0.8), 0 0 3px rgba(255,85,68,0.9);
+  height: 100%;
+  z-index: 0;
 }
 
 /* ===== DISPLAY SCREEN ===== */
@@ -553,8 +531,4 @@
     height: 150px;
   }
 
-  .speaker-dots.mobile {
-    grid-template-columns: repeat(16, 1fr);
-    grid-template-rows: repeat(10, 1fr);
-  }
 }

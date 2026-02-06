@@ -12,40 +12,52 @@ const MEASURES_PER_BUMP = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
 
-// Grid dimensions
-const COLS = 24
-const ROWS = 16
-const COLS_MOBILE = 16
-const ROWS_MOBILE = 10
+// Generate a smooth ECG PQRST waveform cycle (normalized -1 to 1)
+function generateECGCycle(numPoints: number): number[] {
+  const wave: number[] = []
+  for (let i = 0; i < numPoints; i++) {
+    const t = i / numPoints
+    let y = 0
+    // P wave (small upward bump)
+    if (t > 0.08 && t < 0.2) {
+      const pt = (t - 0.08) / 0.12
+      y = -0.12 * Math.sin(pt * Math.PI)
+    }
+    // QRS complex (sharp spike)
+    else if (t > 0.28 && t < 0.32) {
+      const qt = (t - 0.28) / 0.04
+      y = 0.08 * Math.sin(qt * Math.PI)
+    } else if (t > 0.32 && t < 0.38) {
+      const rt = (t - 0.32) / 0.06
+      y = -0.85 * Math.sin(rt * Math.PI)
+    } else if (t > 0.38 && t < 0.44) {
+      const st = (t - 0.38) / 0.06
+      y = 0.35 * Math.sin(st * Math.PI)
+    }
+    // T wave (gentle bump)
+    else if (t > 0.52 && t < 0.72) {
+      const tt = (t - 0.52) / 0.2
+      y = -0.18 * Math.sin(tt * Math.PI)
+    }
+    wave.push(y)
+  }
+  return wave
+}
 
-// ECG waveform shape — row offsets from baseline (negative = up, positive = down)
-// Classic PQRST pattern: flat, P-wave bump, flat, sharp QRS spike, flat, T-wave, flat
-// prettier-ignore
-const ECG_WAVE = [0, 0, 0, 0, 1, 1, 0, 0, -1, -6, 6, -2, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0]
+const ECG_CYCLE = generateECGCycle(200)
 
 function App() {
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 440px)').matches)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 440px)')
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-
-  const cols = isMobile ? COLS_MOBILE : COLS
-  const rows = isMobile ? ROWS_MOBILE : ROWS
-  const totalDots = cols * rows
-
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
-  const [selectedIncrement, setSelectedIncrement] = useState(1) // default B (+10)
+  const [selectedIncrement, setSelectedIncrement] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
   const [currentBeat, setCurrentBeat] = useState(-1)
   const [measureInCycle, setMeasureInCycle] = useState(0)
   const [_totalMeasures, setTotalMeasures] = useState(0)
-  const [waveGrid, setWaveGrid] = useState<number[]>(() => new Array(totalDots).fill(0))
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -60,40 +72,189 @@ function App() {
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
 
-  // ECG waveform animation
+  // ECG canvas animation refs
   const wavePhaseRef = useRef(0)
   const animFrameRef = useRef<number | null>(null)
   const lastFrameTimeRef = useRef(0)
+  const drawECG = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-  const computeWaveGrid = useCallback((phase: number, numCols: number, numRows: number) => {
-    const grid = new Array(numCols * numRows).fill(0)
-    const baseline = Math.floor(numRows / 2)
-    const waveLen = ECG_WAVE.length
-    // Scale wave amplitude for mobile (fewer rows)
-    const ampScale = numRows / ROWS
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-    for (let c = 0; c < numCols; c++) {
-      // The wave index at this column — phase scrolls the wave across
-      const waveIdx = Math.floor(phase + c) % waveLen
-      const rawOffset = ECG_WAVE[waveIdx]
-      const offset = Math.round(rawOffset * ampScale)
-      const row = baseline + offset
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    const w = rect.width * dpr
+    const h = rect.height * dpr
 
-      // Draw the dot and fill between baseline and row for line thickness
-      const minR = Math.min(baseline, row)
-      const maxR = Math.max(baseline, row)
-      for (let r = minR; r <= maxR; r++) {
-        if (r >= 0 && r < numRows) {
-          // Brightness: 2 = spike area, 1 = baseline
-          grid[r * numCols + c] = (Math.abs(rawOffset) >= 3) ? 2 : 1
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+
+    ctx.clearRect(0, 0, w, h)
+
+    // Draw subtle grid lines
+    ctx.strokeStyle = 'rgba(255, 58, 58, 0.04)'
+    ctx.lineWidth = dpr
+    const gridSpacingX = w / 12
+    const gridSpacingY = h / 8
+    ctx.beginPath()
+    for (let i = 1; i < 12; i++) {
+      const x = i * gridSpacingX
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, h)
+    }
+    for (let i = 1; i < 8; i++) {
+      const y = i * gridSpacingY
+      ctx.moveTo(0, y)
+      ctx.lineTo(w, y)
+    }
+    ctx.stroke()
+
+    // Finer sub-grid
+    ctx.strokeStyle = 'rgba(255, 58, 58, 0.015)'
+    ctx.lineWidth = dpr * 0.5
+    const subSpacingX = gridSpacingX / 5
+    const subSpacingY = gridSpacingY / 4
+    ctx.beginPath()
+    for (let i = 1; i < 60; i++) {
+      const x = i * subSpacingX
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, h)
+    }
+    for (let i = 1; i < 32; i++) {
+      const y = i * subSpacingY
+      ctx.moveTo(0, y)
+      ctx.lineTo(w, y)
+    }
+    ctx.stroke()
+
+    if (!isPlayingRef.current || isPausedRef.current) {
+      // Draw flatline when stopped/paused
+      const baseY = h * 0.55
+      ctx.strokeStyle = 'rgba(255, 58, 58, 0.15)'
+      ctx.lineWidth = dpr * 1.5
+      ctx.beginPath()
+      ctx.moveTo(0, baseY)
+      ctx.lineTo(w, baseY)
+      ctx.stroke()
+      return
+    }
+
+    const phase = wavePhaseRef.current
+    const cycleLen = ECG_CYCLE.length
+    const baseY = h * 0.55
+    const amplitude = h * 0.38
+    const totalPoints = Math.floor(w)
+
+    // Phosphor trail: draw the full waveform with fading trail behind the sweep cursor
+    const sweepX = (phase % totalPoints)
+
+    // Draw the waveform trace with phosphor afterglow
+    for (let pass = 0; pass < 2; pass++) {
+      // Pass 0: glow, Pass 1: core line
+      ctx.beginPath()
+      let started = false
+
+      for (let px = 0; px < totalPoints; px++) {
+        // How far behind the sweep cursor is this pixel?
+        let age = sweepX - px
+        if (age < 0) age += totalPoints
+
+        // Only draw pixels that have been "written" (behind the cursor)
+        // and within the trail length
+        const trailLength = totalPoints * 0.85
+        if (age > trailLength) continue
+
+        // Fade based on age
+        const fadeFactor = 1.0 - (age / trailLength)
+        const alpha = fadeFactor * fadeFactor // quadratic fade for phosphor feel
+
+        // Get the ECG value at this position
+        const waveIdx = Math.floor((phase - (sweepX - px) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
+        const val = ECG_CYCLE[waveIdx]
+        const y = baseY + val * amplitude
+
+        if (pass === 0) {
+          // Glow pass — draw segments with varying alpha
+          if (!started) {
+            ctx.moveTo(px, y)
+            started = true
+          }
+          // Draw glow segments individually for alpha variation
+          ctx.strokeStyle = `rgba(255, 58, 58, ${alpha * 0.3})`
+          ctx.lineWidth = dpr * 6
+          ctx.beginPath()
+          ctx.moveTo(px, y)
+          // Look ahead one pixel
+          const nextPx = px + 1
+          if (nextPx < totalPoints) {
+            let nextAge = sweepX - nextPx
+            if (nextAge < 0) nextAge += totalPoints
+            if (nextAge <= trailLength) {
+              const nextWaveIdx = Math.floor((phase - (sweepX - nextPx) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
+              const nextVal = ECG_CYCLE[nextWaveIdx]
+              const nextY = baseY + nextVal * amplitude
+              ctx.lineTo(nextPx, nextY)
+            }
+          }
+          ctx.stroke()
+        } else {
+          // Core line pass
+          ctx.strokeStyle = `rgba(255, 68, 58, ${alpha * 0.9})`
+          ctx.lineWidth = dpr * 2
+          ctx.beginPath()
+          ctx.moveTo(px, y)
+          const nextPx = px + 1
+          if (nextPx < totalPoints) {
+            let nextAge = sweepX - nextPx
+            if (nextAge < 0) nextAge += totalPoints
+            if (nextAge <= trailLength) {
+              const nextWaveIdx = Math.floor((phase - (sweepX - nextPx) + totalPoints * 100) * (cycleLen / totalPoints)) % cycleLen
+              const nextVal = ECG_CYCLE[nextWaveIdx]
+              const nextY = baseY + nextVal * amplitude
+              ctx.lineTo(nextPx, nextY)
+            }
+          }
+          ctx.stroke()
         }
       }
-      // Always draw baseline dot
-      if (baseline >= 0 && baseline < numRows) {
-        if (grid[baseline * numCols + c] === 0) grid[baseline * numCols + c] = 1
-      }
     }
-    return grid
+
+    // Bright dot at the sweep cursor position
+    const cursorWaveIdx = Math.floor(phase * (cycleLen / totalPoints)) % cycleLen
+    const cursorY = baseY + ECG_CYCLE[cursorWaveIdx] * amplitude
+    const cursorX = sweepX
+
+    // Outer glow
+    const gradient = ctx.createRadialGradient(cursorX, cursorY, 0, cursorX, cursorY, dpr * 12)
+    gradient.addColorStop(0, 'rgba(255, 80, 60, 0.6)')
+    gradient.addColorStop(0.5, 'rgba(255, 58, 58, 0.15)')
+    gradient.addColorStop(1, 'rgba(255, 58, 58, 0)')
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(cursorX, cursorY, dpr * 12, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Core dot
+    ctx.fillStyle = '#ff6655'
+    ctx.shadowColor = '#ff3a3a'
+    ctx.shadowBlur = dpr * 8
+    ctx.beginPath()
+    ctx.arc(cursorX, cursorY, dpr * 2.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+
+    // Dark gap ahead of cursor (erasing ahead)
+    const gapWidth = totalPoints * 0.08
+    const gapGradient = ctx.createLinearGradient(cursorX, 0, cursorX + gapWidth, 0)
+    gapGradient.addColorStop(0, 'rgba(17, 17, 20, 0)')
+    gapGradient.addColorStop(0.3, 'rgba(17, 17, 20, 0.95)')
+    gapGradient.addColorStop(1, 'rgba(17, 17, 20, 0)')
+    ctx.fillStyle = gapGradient
+    ctx.fillRect(cursorX, 0, gapWidth, h)
   }, [])
 
   const animateWaveform = useCallback(() => {
@@ -101,20 +262,21 @@ function App() {
 
     const now = performance.now()
     const elapsed = now - lastFrameTimeRef.current
-
-    // Advance phase based on BPM — one full wave cycle per beat
-    // columns per ms = (ECG_WAVE.length * bpm) / 60000
-    const colsPerMs = (ECG_WAVE.length * currentBpmRef.current) / 60000
-    wavePhaseRef.current += elapsed * colsPerMs
     lastFrameTimeRef.current = now
 
-    const numCols = window.matchMedia('(max-width: 440px)').matches ? COLS_MOBILE : COLS
-    const numRows = window.matchMedia('(max-width: 440px)').matches ? ROWS_MOBILE : ROWS
-    const grid = computeWaveGrid(wavePhaseRef.current, numCols, numRows)
-    setWaveGrid(grid)
+    // Advance phase: one full cycle per beat
+    // pixels per ms = (canvasWidth * bpm) / 60000
+    const canvas = canvasRef.current
+    if (canvas) {
+      const dpr = window.devicePixelRatio || 1
+      const totalPoints = Math.floor(canvas.getBoundingClientRect().width * dpr)
+      const pixelsPerMs = (totalPoints * currentBpmRef.current) / 60000
+      wavePhaseRef.current += elapsed * pixelsPerMs
+    }
 
+    drawECG()
     animFrameRef.current = requestAnimationFrame(animateWaveform)
-  }, [computeWaveGrid])
+  }, [drawECG])
 
   const startWaveform = useCallback(() => {
     wavePhaseRef.current = 0
@@ -127,7 +289,20 @@ function App() {
       cancelAnimationFrame(animFrameRef.current)
       animFrameRef.current = null
     }
-  }, [])
+    // Draw stopped state (flatline + grid)
+    drawECG()
+  }, [drawECG])
+
+  // Resize handler for canvas
+  useEffect(() => {
+    const handleResize = () => {
+      drawECG()
+    }
+    window.addEventListener('resize', handleResize)
+    // Initial draw
+    drawECG()
+    return () => window.removeEventListener('resize', handleResize)
+  }, [drawECG])
 
   const playClick = useCallback((time: number, isDownbeat: boolean) => {
     const ctx = audioCtxRef.current
@@ -231,7 +406,7 @@ function App() {
     setIsPaused(false)
     scheduleNote()
     startWaveform()
-  }, [isPlaying, isPaused, startBpm, scheduleNote, startWaveform])
+  }, [isPlaying, isPaused, startBpm, scheduleNote, startWaveform, animateWaveform])
 
   const pause = useCallback(() => {
     if (!isPlaying || isPaused) return
@@ -266,8 +441,7 @@ function App() {
     setTotalMeasures(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
-    setWaveGrid(new Array(totalDots).fill(0))
-  }, [startBpmInput, stopWaveform, totalDots])
+  }, [startBpmInput, stopWaveform])
 
   useEffect(() => {
     return () => {
@@ -287,16 +461,9 @@ function App() {
 
   return (
     <div className="device">
-      {/* Speaker Grille */}
+      {/* ECG Monitor */}
       <div className={`speaker ${isPlaying && !isPaused ? 'active' : ''}`}>
-        <div className={`speaker-dots ${isMobile ? 'mobile' : ''}`}>
-          {Array.from({ length: totalDots }, (_, i) => (
-            <div
-              key={i}
-              className={`speaker-dot${waveGrid[i] === 1 ? ' wave' : ''}${waveGrid[i] === 2 ? ' wave spike' : ''}`}
-            />
-          ))}
-        </div>
+        <canvas ref={canvasRef} className="ecg-canvas" />
       </div>
 
       {/* Display Screen */}
