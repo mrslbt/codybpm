@@ -527,12 +527,12 @@ function App() {
   return (
     <div className="device">
       {/* ECG Monitor */}
-      <div className={`speaker ${isPlaying && !isPaused ? 'active' : ''}`}>
+      <div className={`speaker ${isPlaying ? 'active' : ''} ${isPaused ? 'paused' : ''}`}>
         <canvas ref={canvasRef} className="ecg-canvas" />
       </div>
 
       {/* Display Screen */}
-      <div className={`screen ${isPlaying && !isPaused ? 'playing' : ''}`}>
+      <div className={`screen ${isPlaying ? 'playing' : ''} ${isPaused ? 'paused' : ''}`}>
         <div className="screen-header">
           <span className="mode-label">Mode: {getModeText()}</span>
           <div className="status-dots">

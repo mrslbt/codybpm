@@ -623,6 +623,10 @@
   animation: screenGlow 2s ease-in-out infinite;
 }
 
+.screen.playing.paused {
+  animation-play-state: paused;
+}
+
 /* ===== SPEAKER GRILLE BREATHING ===== */
 @keyframes speakerBreath {
   0%, 100% {
@@ -640,6 +644,10 @@
 
 .speaker.active {
   animation: speakerBreath 2s ease-in-out infinite;
+}
+
+.speaker.active.paused {
+  animation-play-state: paused;
 }
 
 /* ===== RESPONSIVE ===== */
