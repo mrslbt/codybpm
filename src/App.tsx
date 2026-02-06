@@ -12,51 +12,16 @@ const MEASURES_PER_BUMP = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
 
-// Desktop: 24x16 pixel art icons — high-res, symmetrical fill
+// Grid dimensions
 const COLS = 24
 const ROWS = 16
-const TOTAL_DOTS = COLS * ROWS
-
-// Mobile: 16x10 pixel art icons — compact, no clipping
 const COLS_MOBILE = 16
 const ROWS_MOBILE = 10
-const TOTAL_DOTS_MOBILE = COLS_MOBILE * ROWS_MOBILE
 
+// ECG waveform shape — row offsets from baseline (negative = up, positive = down)
+// Classic PQRST pattern: flat, P-wave bump, flat, sharp QRS spike, flat, T-wave, flat
 // prettier-ignore
-const HEART_DESKTOP: number[] = [
-  // Heart ❤️ — 24x16 grid, centered
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,1,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,1,1,1,1,1,0,0,1,1,1,1,1,0,0,0,0,0,0,
-  0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
-  0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-]
-
-// prettier-ignore
-const HEART_MOBILE: number[] = [
-  // Heart ❤️ — 16x10 grid, centered
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,
-  0,0,1,1,1,1,0,0,1,1,1,1,0,0,0,0,
-  0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
-  0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
-  0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,
-  0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,
-  0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-]
+const ECG_WAVE = [0, 0, 0, 0, 1, 1, 0, 0, -1, -6, 6, -2, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0]
 
 function App() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 440px)').matches)
@@ -67,8 +32,9 @@ function App() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const heartPattern = isMobile ? HEART_MOBILE : HEART_DESKTOP
-  const totalDots = isMobile ? TOTAL_DOTS_MOBILE : TOTAL_DOTS
+  const cols = isMobile ? COLS_MOBILE : COLS
+  const rows = isMobile ? ROWS_MOBILE : ROWS
+  const totalDots = cols * rows
 
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
@@ -79,7 +45,7 @@ function App() {
   const [currentBeat, setCurrentBeat] = useState(-1)
   const [measureInCycle, setMeasureInCycle] = useState(0)
   const [_totalMeasures, setTotalMeasures] = useState(0)
-  const [speakerFlash, setSpeakerFlash] = useState(false)
+  const [waveGrid, setWaveGrid] = useState<number[]>(() => new Array(totalDots).fill(0))
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -94,6 +60,75 @@ function App() {
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
 
+  // ECG waveform animation
+  const wavePhaseRef = useRef(0)
+  const animFrameRef = useRef<number | null>(null)
+  const lastFrameTimeRef = useRef(0)
+
+  const computeWaveGrid = useCallback((phase: number, numCols: number, numRows: number) => {
+    const grid = new Array(numCols * numRows).fill(0)
+    const baseline = Math.floor(numRows / 2)
+    const waveLen = ECG_WAVE.length
+    // Scale wave amplitude for mobile (fewer rows)
+    const ampScale = numRows / ROWS
+
+    for (let c = 0; c < numCols; c++) {
+      // The wave index at this column — phase scrolls the wave across
+      const waveIdx = Math.floor(phase + c) % waveLen
+      const rawOffset = ECG_WAVE[waveIdx]
+      const offset = Math.round(rawOffset * ampScale)
+      const row = baseline + offset
+
+      // Draw the dot and fill between baseline and row for line thickness
+      const minR = Math.min(baseline, row)
+      const maxR = Math.max(baseline, row)
+      for (let r = minR; r <= maxR; r++) {
+        if (r >= 0 && r < numRows) {
+          // Brightness: 2 = spike area, 1 = baseline
+          grid[r * numCols + c] = (Math.abs(rawOffset) >= 3) ? 2 : 1
+        }
+      }
+      // Always draw baseline dot
+      if (baseline >= 0 && baseline < numRows) {
+        if (grid[baseline * numCols + c] === 0) grid[baseline * numCols + c] = 1
+      }
+    }
+    return grid
+  }, [])
+
+  const animateWaveform = useCallback(() => {
+    if (!isPlayingRef.current || isPausedRef.current) return
+
+    const now = performance.now()
+    const elapsed = now - lastFrameTimeRef.current
+
+    // Advance phase based on BPM — one full wave cycle per beat
+    // columns per ms = (ECG_WAVE.length * bpm) / 60000
+    const colsPerMs = (ECG_WAVE.length * currentBpmRef.current) / 60000
+    wavePhaseRef.current += elapsed * colsPerMs
+    lastFrameTimeRef.current = now
+
+    const numCols = window.matchMedia('(max-width: 440px)').matches ? COLS_MOBILE : COLS
+    const numRows = window.matchMedia('(max-width: 440px)').matches ? ROWS_MOBILE : ROWS
+    const grid = computeWaveGrid(wavePhaseRef.current, numCols, numRows)
+    setWaveGrid(grid)
+
+    animFrameRef.current = requestAnimationFrame(animateWaveform)
+  }, [computeWaveGrid])
+
+  const startWaveform = useCallback(() => {
+    wavePhaseRef.current = 0
+    lastFrameTimeRef.current = performance.now()
+    animateWaveform()
+  }, [animateWaveform])
+
+  const stopWaveform = useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
+  }, [])
+
   const playClick = useCallback((time: number, isDownbeat: boolean) => {
     const ctx = audioCtxRef.current
     if (!ctx) return
@@ -106,11 +141,6 @@ function App() {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06)
     osc.start(time)
     osc.stop(time + 0.06)
-  }, [])
-
-  const pulseHeartbeat = useCallback(() => {
-    setSpeakerFlash(true)
-    setTimeout(() => setSpeakerFlash(false), 100)
   }, [])
 
   const scheduleNote = useCallback(() => {
@@ -130,7 +160,6 @@ function App() {
       setTimeout(() => {
         if (!isPlayingRef.current) return
         setCurrentBeat(beat)
-        pulseHeartbeat()
       }, delay)
 
       const nextBeat = beat + 1
@@ -165,7 +194,7 @@ function App() {
     }
 
     timerRef.current = window.setTimeout(scheduleNote, scheduleInterval)
-  }, [playClick, pulseHeartbeat])
+  }, [playClick])
 
   const start = useCallback(() => {
     if (isPlaying && !isPaused) return
@@ -175,7 +204,9 @@ function App() {
       isPausedRef.current = false
       setIsPaused(false)
       nextNoteTimeRef.current = audioCtxRef.current.currentTime
+      lastFrameTimeRef.current = performance.now()
       scheduleNote()
+      animateWaveform()
       return
     }
 
@@ -199,7 +230,8 @@ function App() {
     setIsPlaying(true)
     setIsPaused(false)
     scheduleNote()
-  }, [isPlaying, isPaused, startBpm, scheduleNote])
+    startWaveform()
+  }, [isPlaying, isPaused, startBpm, scheduleNote, startWaveform])
 
   const pause = useCallback(() => {
     if (!isPlaying || isPaused) return
@@ -209,10 +241,11 @@ function App() {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
+    stopWaveform()
     if (audioCtxRef.current) {
       audioCtxRef.current.suspend()
     }
-  }, [isPlaying, isPaused])
+  }, [isPlaying, isPaused, stopWaveform])
 
   const stop = useCallback(() => {
     isPlayingRef.current = false
@@ -227,17 +260,19 @@ function App() {
       audioCtxRef.current.close()
       audioCtxRef.current = null
     }
+    stopWaveform()
     setCurrentBeat(-1)
     setMeasureInCycle(0)
     setTotalMeasures(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
-    setSpeakerFlash(false)
-  }, [startBpmInput])
+    setWaveGrid(new Array(totalDots).fill(0))
+  }, [startBpmInput, stopWaveform, totalDots])
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (audioCtxRef.current) audioCtxRef.current.close()
     }
   }, [])
@@ -254,11 +289,11 @@ function App() {
     <div className="device">
       {/* Speaker Grille */}
       <div className={`speaker ${isPlaying && !isPaused ? 'active' : ''}`}>
-        <div className={`speaker-dots ${isMobile ? 'mobile' : ''} ${speakerFlash ? 'beat-pulse' : ''}`}>
+        <div className={`speaker-dots ${isMobile ? 'mobile' : ''}`}>
           {Array.from({ length: totalDots }, (_, i) => (
             <div
               key={i}
-              className={`speaker-dot ${heartPattern[i] ? 'lit' : ''} ${heartPattern[i] && speakerFlash ? 'flash' : ''}`}
+              className={`speaker-dot${waveGrid[i] === 1 ? ' wave' : ''}${waveGrid[i] === 2 ? ' wave spike' : ''}`}
             />
           ))}
         </div>

@@ -74,25 +74,16 @@
   transition: all 0.1s ease;
 }
 
-.speaker-dot.lit {
+/* ECG waveform dot — baseline trace */
+.speaker-dot.wave {
   background: #ff3a3a;
-  box-shadow: 0 0 4px rgba(255, 58, 58, 0.5);
+  box-shadow: 0 0 3px rgba(255, 58, 58, 0.4);
 }
 
-.speaker-dot.lit.flash {
+/* ECG waveform dot — QRS spike (brighter) */
+.speaker-dot.wave.spike {
   background: #ff5544;
-  box-shadow: 0 0 8px rgba(255, 58, 58, 0.8), 0 0 2px rgba(255,85,68,0.9);
-}
-
-/* Heartbeat pulse — scale the whole grid on each beat */
-@keyframes beatPulse {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.06); }
-  100% { transform: scale(1); }
-}
-
-.speaker-dots.beat-pulse {
-  animation: beatPulse 0.15s ease-out;
+  box-shadow: 0 0 8px rgba(255, 58, 58, 0.8), 0 0 3px rgba(255,85,68,0.9);
 }
 
 /* ===== DISPLAY SCREEN ===== */
