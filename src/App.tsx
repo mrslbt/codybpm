@@ -641,9 +641,15 @@ function App() {
         </button>
       </div>
 
+      <div className="brand-divider" />
+
       <div className="bottom-labels">
-        <span className="bottom-label">CodyBPM</span>
+        <span className="bottom-label">Progressive Metronome</span>
         <span className="bottom-label">+{currentIncrement} BPM / {MEASURES_PER_BUMP} bars</span>
+      </div>
+
+      <div className="brand-mark">
+        <span className="brand-name">CodyBPM</span>
       </div>
 
       <div className="made-in">made in fukuoka</div>

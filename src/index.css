@@ -7,7 +7,7 @@
 html, body, #root {
   height: 100%;
   width: 100%;
-  background: #0a0a0a;
+  background: #080808;
   overflow: auto;
 }
 
@@ -19,6 +19,21 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  /* Atmospheric radial gradient — dark vignette with subtle warm center */
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255, 40, 30, 0.015) 0%, transparent 70%),
+    radial-gradient(ellipse at 50% 50%, #0e0e10 0%, #060606 100%);
+}
+
+/* Subtle dot grid pattern on the background — like a workbench surface */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 #root {
@@ -26,4 +41,6 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
 }
