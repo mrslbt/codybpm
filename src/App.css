@@ -74,6 +74,7 @@
   box-shadow:
     inset 0 2px 12px rgba(0,0,0,0.7),
     inset 0 0 0 1px rgba(255,255,255,0.03);
+  transition: box-shadow 0.5s ease;
   /* Staggered entry */
   animation: sectionFadeIn 0.5s ease both;
   animation-delay: 0.3s;
@@ -114,6 +115,7 @@
   box-shadow:
     inset 0 2px 12px rgba(0,0,0,0.7),
     0 1px 0 rgba(255,255,255,0.03);
+  transition: box-shadow 0.5s ease;
   position: relative;
   /* Staggered entry */
   animation: sectionFadeIn 0.5s ease both;
