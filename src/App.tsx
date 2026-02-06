@@ -115,6 +115,9 @@ function App() {
   const wavePhaseRef = useRef(0)
   const animFrameRef = useRef<number | null>(null)
   const lastFrameTimeRef = useRef(0)
+  // Fade-out on stop
+  const fadeOutRef = useRef(0) // 1 = full, fades to 0
+  const fadeOutFrameRef = useRef<number | null>(null)
   // Beat variation: store variations keyed by cycle index
   const beatVarsRef = useRef<Map<number, BeatVariation>>(new Map())
   const baselineWanderRef = useRef(0)
@@ -188,8 +191,11 @@ function App() {
     }
     ctx.stroke()
 
-    if (!isPlayingRef.current && !isPausedRef.current) {
-      // Draw flatline only when fully stopped
+    const isStopped = !isPlayingRef.current && !isPausedRef.current
+    const fadeAlpha = fadeOutRef.current
+
+    if (isStopped && fadeAlpha <= 0) {
+      // Fully stopped and faded — draw flatline only
       const baseY = h * 0.55
       ctx.strokeStyle = 'rgba(255, 58, 58, 0.15)'
       ctx.lineWidth = dpr * 1.5
@@ -198,6 +204,18 @@ function App() {
       ctx.lineTo(w, baseY)
       ctx.stroke()
       return
+    }
+
+    // During fade-out, draw flatline underneath
+    if (isStopped && fadeAlpha > 0) {
+      const baseY = h * 0.55
+      ctx.strokeStyle = `rgba(255, 58, 58, ${0.15 * (1 - fadeAlpha)})`
+      ctx.lineWidth = dpr * 1.5
+      ctx.beginPath()
+      ctx.moveTo(0, baseY)
+      ctx.lineTo(w, baseY)
+      ctx.stroke()
+      ctx.globalAlpha = fadeAlpha
     }
 
     const phase = wavePhaseRef.current
@@ -317,6 +335,9 @@ function App() {
     gapGradient.addColorStop(1, 'rgba(17, 17, 20, 0)')
     ctx.fillStyle = gapGradient
     ctx.fillRect(cursorX, 0, gapWidth, h)
+
+    // Reset globalAlpha if it was changed during fade-out
+    ctx.globalAlpha = 1
   }, [getVariation])
 
   const animateWaveform = useCallback(() => {
@@ -341,6 +362,12 @@ function App() {
   }, [drawECG])
 
   const startWaveform = useCallback(() => {
+    // Cancel any fade-out in progress
+    if (fadeOutFrameRef.current) {
+      cancelAnimationFrame(fadeOutFrameRef.current)
+      fadeOutFrameRef.current = null
+    }
+    fadeOutRef.current = 0
     wavePhaseRef.current = 0
     lastFrameTimeRef.current = performance.now()
     beatVarsRef.current.clear()
@@ -354,8 +381,23 @@ function App() {
       cancelAnimationFrame(animFrameRef.current)
       animFrameRef.current = null
     }
-    // Draw stopped state (flatline + grid)
-    drawECG()
+    // Fade out the waveform over ~400ms
+    fadeOutRef.current = 1
+    const fadeStep = () => {
+      fadeOutRef.current -= 0.05
+      if (fadeOutRef.current <= 0) {
+        fadeOutRef.current = 0
+        drawECG()
+        if (fadeOutFrameRef.current) {
+          cancelAnimationFrame(fadeOutFrameRef.current)
+          fadeOutFrameRef.current = null
+        }
+        return
+      }
+      drawECG()
+      fadeOutFrameRef.current = requestAnimationFrame(fadeStep)
+    }
+    fadeOutFrameRef.current = requestAnimationFrame(fadeStep)
   }, [drawECG])
 
   // Resize handler for canvas
@@ -512,6 +554,7 @@ function App() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+      if (fadeOutFrameRef.current) cancelAnimationFrame(fadeOutFrameRef.current)
       if (audioCtxRef.current) audioCtxRef.current.close()
     }
   }, [])
