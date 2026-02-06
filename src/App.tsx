@@ -419,10 +419,10 @@ function App() {
     osc.connect(gain)
     gain.connect(ctx.destination)
     osc.frequency.value = isDownbeat ? 1000 : 700
-    gain.gain.setValueAtTime(0.6, time)
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06)
+    gain.gain.setValueAtTime(0.8, time)
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08)
     osc.start(time)
-    osc.stop(time + 0.06)
+    osc.stop(time + 0.08)
   }, [])
 
   const scheduleNote = useCallback(() => {
@@ -494,6 +494,25 @@ function App() {
 
     const ctx = new AudioContext()
     audioCtxRef.current = ctx
+
+    // Mobile browsers (especially iOS) may start AudioContext in suspended state.
+    // Must resume inside user gesture handler to unlock audio.
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
+
+    // iOS silent-mode workaround: play a tiny silent buffer to unlock the audio output.
+    // Without this, oscillator audio won't play through speakers when the phone
+    // mute switch is on (headphones bypass this).
+    try {
+      const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate)
+      const source = ctx.createBufferSource()
+      source.buffer = silentBuffer
+      source.connect(ctx.destination)
+      source.start(0)
+    } catch (_e) {
+      // Ignore — non-critical
+    }
 
     const bpm = Math.min(Math.max(startBpm, 1), MAX_BPM)
     currentBeatRef.current = 0
