@@ -104,6 +104,43 @@
   z-index: 0;
 }
 
+/* ===== PROGRESS BAR ===== */
+.progress-pane {
+  margin-bottom: 14px;
+  animation: sectionFadeIn 0.5s ease both;
+  animation-delay: 0.45s;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 5px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: #1a1a1e;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.4),
+    0 1px 0 rgba(255,255,255,0.02);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff3a3a, #ff6644);
+  border-radius: 3px;
+  transition: width 0.25s linear;
+  box-shadow: 0 0 8px rgba(255, 58, 58, 0.3);
+}
+
 /* ===== DISPLAY SCREEN ===== */
 .screen {
   width: 100%;

@@ -23,7 +23,6 @@ const SUBDIVISIONS = [
   { label: '1/16', perBeat: 4 },  // 16th notes
 ]
 
-const MEASURES_PER_CYCLE = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
 const BUMP_INTERVALS = [
@@ -116,6 +115,7 @@ function App() {
   const [selectedSubdiv, setSelectedSubdiv] = useState(0)   // default quarter
   const [selectedInterval, setSelectedInterval] = useState(1) // default 10s
   const [countdown, setCountdown] = useState(0) // seconds until next BPM bump
+  const [progress, setProgress] = useState(0) // 0 to 1, fraction of interval elapsed
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
@@ -129,7 +129,6 @@ function App() {
   const timerRef = useRef<number | null>(null)
   const nextNoteTimeRef = useRef(0)
   const currentBeatRef = useRef(0)
-  const measureInCycleRef = useRef(0)
   const totalMeasuresRef = useRef(0)
   const currentBpmRef = useRef(DEFAULT_BPM)
   const isPlayingRef = useRef(false)
@@ -143,7 +142,9 @@ function App() {
   const lastBpmBumpTimeRef = useRef(0) // AudioContext time of last BPM bump
   const totalPausedDurationRef = useRef(0) // accumulated paused time
   const pauseStartTimeRef = useRef(0) // when the current pause started
-  const bpmBumpReadyRef = useRef(false) // true once 10s elapsed, waiting for cycle start
+  const bpmBumpReadyRef = useRef(false) // true once interval elapsed, waiting for downbeat
+  const countdownRef = useRef(0)
+  const progressRef = useRef(0)
   const elapsedTimerRef = useRef<number | null>(null) // interval for elapsed display
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
@@ -487,21 +488,30 @@ function App() {
       const sub = currentSubRef.current
       const isMainBeat = sub === 0
       const isDownbeat = beat === 0 && isMainBeat
-      const isCycleStart = isDownbeat && measureInCycleRef.current === 0
 
       // Mark bump as ready once the interval of active playing time has elapsed
-      const activeTime = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
+      const activeTime = nextNoteTimeRef.current - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
       if (activeTime >= bumpIntervalRef.current) {
         bpmBumpReadyRef.current = true
       }
 
-      // Apply BPM bump only on the first beat of a new 4-bar cycle
-      if (bpmBumpReadyRef.current && isCycleStart && totalMeasuresRef.current > 0) {
+      // Apply BPM bump on the downbeat of any bar (after interval elapsed)
+      if (bpmBumpReadyRef.current && isDownbeat && totalMeasuresRef.current > 0) {
         const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
         currentBpmRef.current = newBpm
         bpmBumpReadyRef.current = false
-        lastBpmBumpTimeRef.current = ctx.currentTime
+        lastBpmBumpTimeRef.current = nextNoteTimeRef.current
         totalPausedDurationRef.current = 0
+      }
+
+      // Compute progress for UI
+      const timeSinceBump = nextNoteTimeRef.current - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
+      if (bpmBumpReadyRef.current) {
+        countdownRef.current = 0
+        progressRef.current = 1
+      } else {
+        countdownRef.current = Math.max(0, Math.ceil(bumpIntervalRef.current - timeSinceBump))
+        progressRef.current = Math.min(1, timeSinceBump / bumpIntervalRef.current)
       }
 
       // Determine click type
@@ -536,11 +546,7 @@ function App() {
         const nextBeat = beat + 1
         if (nextBeat >= beatsPerMeasureRef.current) {
           currentBeatRef.current = 0
-          measureInCycleRef.current += 1
           totalMeasuresRef.current += 1
-          if (measureInCycleRef.current >= MEASURES_PER_CYCLE) {
-            measureInCycleRef.current = 0
-          }
         } else {
           currentBeatRef.current = nextBeat
         }
@@ -572,12 +578,8 @@ function App() {
         if (!ctx) return
         const active = ctx.currentTime - totalPausedDurationRef.current
         setElapsedTime(Math.floor(active))
-        // Countdown to next BPM bump
-        const timeSinceLastBump = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
-        const remaining = bpmBumpReadyRef.current
-          ? 0
-          : Math.max(0, Math.ceil(bumpIntervalRef.current - timeSinceLastBump))
-        setCountdown(remaining)
+        setCountdown(countdownRef.current)
+        setProgress(progressRef.current)
       }, 250)
       scheduleNote()
       animateWaveform()
@@ -609,7 +611,6 @@ function App() {
     const bpm = Math.min(Math.max(startBpm, 1), MAX_BPM)
     currentBeatRef.current = 0
     currentSubRef.current = 0
-    measureInCycleRef.current = 0
     totalMeasuresRef.current = 0
     currentBpmRef.current = bpm
     nextNoteTimeRef.current = ctx.currentTime
@@ -618,10 +619,13 @@ function App() {
     pauseStartTimeRef.current = 0
     bpmBumpReadyRef.current = false
 
+    countdownRef.current = bumpIntervalRef.current
+    progressRef.current = 0
     setCurrentBeat(-1)
     setTotalMeasures(0)
     setElapsedTime(0)
     setCountdown(bumpIntervalRef.current)
+    setProgress(0)
     setCurrentBpm(bpm)
 
     isPlayingRef.current = true
@@ -637,12 +641,8 @@ function App() {
       if (!actx) return
       const active = actx.currentTime - totalPausedDurationRef.current
       setElapsedTime(Math.floor(active))
-      // Countdown to next BPM bump
-      const timeSinceLastBump = actx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
-      const remaining = bpmBumpReadyRef.current
-        ? 0
-        : Math.max(0, Math.ceil(bumpIntervalRef.current - timeSinceLastBump))
-      setCountdown(remaining)
+      setCountdown(countdownRef.current)
+      setProgress(progressRef.current)
     }, 250)
 
     scheduleNote()
@@ -692,6 +692,7 @@ function App() {
     setTotalMeasures(0)
     setElapsedTime(0)
     setCountdown(0)
+    setProgress(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
   }, [startBpmInput, stopWaveform])
@@ -727,6 +728,20 @@ function App() {
         <canvas ref={canvasRef} className="ecg-canvas" />
       </div>
 
+      {/* BPM Increment Progress */}
+      <div className="progress-pane">
+        <div className="progress-label">
+          <span>Next +{currentIncrement}</span>
+          <span>{isPlaying && !isPaused ? `${countdown}s` : `${BUMP_INTERVALS[selectedInterval].value}s`}</span>
+        </div>
+        <div className="progress-track">
+          <div
+            className="progress-fill"
+            style={{ width: `${(isPlaying ? progress : 0) * 100}%` }}
+          />
+        </div>
+      </div>
+
       {/* Display Screen */}
       <div className={`screen ${isPlaying ? 'playing' : ''} ${isPaused ? 'paused' : ''}`}>
         <div className="screen-header">
@@ -757,7 +772,7 @@ function App() {
 
         <div className="screen-footer">
           <span>{isPlaying ? formatTime(elapsedTime) : `Bar 1`}</span>
-          <span>{isPlaying ? `Next +${currentIncrement} in ${countdown}s` : `Start: ${startBpm}`}</span>
+          <span>{isPlaying ? `+${currentIncrement} / ${BUMP_INTERVALS[selectedInterval].value}s` : `Start: ${startBpm}`}</span>
         </div>
       </div>
 
