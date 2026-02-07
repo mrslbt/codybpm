@@ -11,9 +11,9 @@ const INCREMENTS = [
 ]
 
 const BEATS_PER_MEASURE = 4
-const MEASURES_PER_BUMP = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
+const BPM_BUMP_INTERVAL = 10 // seconds between BPM increments
 
 // Generate a smooth ECG PQRST waveform cycle (normalized -1 to 1)
 function generateECGCycle(numPoints: number): number[] {
@@ -96,8 +96,8 @@ function App() {
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
   const [currentBeat, setCurrentBeat] = useState(-1)
-  const [_measureInCycle, setMeasureInCycle] = useState(0)
   const [_totalMeasures, setTotalMeasures] = useState(0)
+  const [elapsedTime, setElapsedTime] = useState(0) // seconds since start
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -105,12 +105,16 @@ function App() {
   const timerRef = useRef<number | null>(null)
   const nextNoteTimeRef = useRef(0)
   const currentBeatRef = useRef(0)
-  const measureInCycleRef = useRef(0)
   const totalMeasuresRef = useRef(0)
   const currentBpmRef = useRef(DEFAULT_BPM)
   const isPlayingRef = useRef(false)
   const isPausedRef = useRef(false)
   const incrementRef = useRef(INCREMENTS[3].value)
+  // Time-based BPM increment tracking
+  const lastBpmBumpTimeRef = useRef(0) // AudioContext time of last BPM bump
+  const totalPausedDurationRef = useRef(0) // accumulated paused time
+  const pauseStartTimeRef = useRef(0) // when the current pause started
+  const elapsedTimerRef = useRef<number | null>(null) // interval for elapsed display
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
 
@@ -439,10 +443,14 @@ function App() {
       const beat = currentBeatRef.current
       const isDownbeat = beat === 0
 
-      // BPM change happens on the first beat of every bar (except the very first)
-      if (isDownbeat && totalMeasuresRef.current > 0) {
+      // Time-based BPM increment: check if 10 seconds of playing time have elapsed
+      const activeTime = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
+      if (activeTime >= BPM_BUMP_INTERVAL) {
         const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
         currentBpmRef.current = newBpm
+        // Reset bump timer — account for overshoot so timing stays consistent
+        lastBpmBumpTimeRef.current += BPM_BUMP_INTERVAL + totalPausedDurationRef.current
+        totalPausedDurationRef.current = 0
       }
 
       playClick(nextNoteTimeRef.current, isDownbeat)
@@ -451,14 +459,12 @@ function App() {
 
       // Capture current state for the UI update
       const uiBpm = currentBpmRef.current
-      const uiMeasure = measureInCycleRef.current
       const uiTotal = totalMeasuresRef.current
 
       setTimeout(() => {
         if (!isPlayingRef.current) return
         setCurrentBeat(beat)
         setCurrentBpm(uiBpm)
-        setMeasureInCycle(uiMeasure)
         setTotalMeasures(uiTotal)
       }, delay)
 
@@ -466,12 +472,7 @@ function App() {
       const nextBeat = beat + 1
       if (nextBeat >= BEATS_PER_MEASURE) {
         currentBeatRef.current = 0
-        measureInCycleRef.current += 1
         totalMeasuresRef.current += 1
-
-        if (measureInCycleRef.current >= MEASURES_PER_BUMP) {
-          measureInCycleRef.current = 0
-        }
       } else {
         currentBeatRef.current = nextBeat
       }
@@ -490,8 +491,18 @@ function App() {
       audioCtxRef.current.resume()
       isPausedRef.current = false
       setIsPaused(false)
+      // Account for paused duration
+      totalPausedDurationRef.current += audioCtxRef.current.currentTime - pauseStartTimeRef.current
       nextNoteTimeRef.current = audioCtxRef.current.currentTime
       lastFrameTimeRef.current = performance.now()
+      // Restart elapsed timer
+      elapsedTimerRef.current = window.setInterval(() => {
+        if (!isPlayingRef.current || isPausedRef.current) return
+        const ctx = audioCtxRef.current
+        if (!ctx) return
+        const active = ctx.currentTime - totalPausedDurationRef.current
+        setElapsedTime(Math.floor(active))
+      }, 250)
       scheduleNote()
       animateWaveform()
       return
@@ -521,20 +532,33 @@ function App() {
 
     const bpm = Math.min(Math.max(startBpm, 1), MAX_BPM)
     currentBeatRef.current = 0
-    measureInCycleRef.current = 0
     totalMeasuresRef.current = 0
     currentBpmRef.current = bpm
     nextNoteTimeRef.current = ctx.currentTime
+    lastBpmBumpTimeRef.current = ctx.currentTime
+    totalPausedDurationRef.current = 0
+    pauseStartTimeRef.current = 0
 
     setCurrentBeat(-1)
-    setMeasureInCycle(0)
     setTotalMeasures(0)
+    setElapsedTime(0)
     setCurrentBpm(bpm)
 
     isPlayingRef.current = true
     isPausedRef.current = false
     setIsPlaying(true)
     setIsPaused(false)
+
+    // Start elapsed time display timer
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
+    elapsedTimerRef.current = window.setInterval(() => {
+      if (!isPlayingRef.current || isPausedRef.current) return
+      const actx = audioCtxRef.current
+      if (!actx) return
+      const active = actx.currentTime - totalPausedDurationRef.current
+      setElapsedTime(Math.floor(active))
+    }, 250)
+
     scheduleNote()
     startWaveform()
   }, [isPlaying, isPaused, startBpm, scheduleNote, startWaveform, animateWaveform])
@@ -543,9 +567,16 @@ function App() {
     if (!isPlaying || isPaused) return
     isPausedRef.current = true
     setIsPaused(true)
+    if (audioCtxRef.current) {
+      pauseStartTimeRef.current = audioCtxRef.current.currentTime
+    }
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
+    }
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current)
+      elapsedTimerRef.current = null
     }
     stopWaveform()
     if (audioCtxRef.current) {
@@ -562,14 +593,18 @@ function App() {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current)
+      elapsedTimerRef.current = null
+    }
     if (audioCtxRef.current) {
       audioCtxRef.current.close()
       audioCtxRef.current = null
     }
     stopWaveform()
     setCurrentBeat(-1)
-    setMeasureInCycle(0)
     setTotalMeasures(0)
+    setElapsedTime(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
   }, [startBpmInput, stopWaveform])
@@ -577,6 +612,7 @@ function App() {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (fadeOutFrameRef.current) cancelAnimationFrame(fadeOutFrameRef.current)
       if (audioCtxRef.current) audioCtxRef.current.close()
@@ -589,6 +625,12 @@ function App() {
     if (!isPlaying) return 'Ready'
     if (isPaused) return 'Paused'
     return 'Training'
+  }
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
   }
 
   return (
@@ -627,8 +669,8 @@ function App() {
         </div>
 
         <div className="screen-footer">
-          <span>Bar {_totalMeasures + 1}</span>
-          <span>{isPlaying ? `+${currentIncrement} / bar` : `Start: ${startBpm}`}</span>
+          <span>{isPlaying ? formatTime(elapsedTime) : `Bar 1`}</span>
+          <span>{isPlaying ? `+${currentIncrement} / ${BPM_BUMP_INTERVAL}s` : `Start: ${startBpm}`}</span>
         </div>
       </div>
 
@@ -710,7 +752,7 @@ function App() {
 
       <div className="bottom-labels">
         <span className="bottom-label">Progressive Metronome</span>
-        <span className="bottom-label">+{currentIncrement} BPM / bar</span>
+        <span className="bottom-label">+{currentIncrement} BPM / {BPM_BUMP_INTERVAL}s</span>
       </div>
 
       <div className="brand-mark">
