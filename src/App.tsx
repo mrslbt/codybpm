@@ -436,14 +436,30 @@ function App() {
       const beat = currentBeatRef.current
       const isDownbeat = beat === 0
 
+      // BPM change happens on the first beat of a new cycle
+      if (isDownbeat && measureInCycleRef.current === 0 && totalMeasuresRef.current > 0) {
+        const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
+        currentBpmRef.current = newBpm
+      }
+
       playClick(nextNoteTimeRef.current, isDownbeat)
 
       const delay = Math.max(0, (nextNoteTimeRef.current - ctx.currentTime) * 1000)
+
+      // Capture current state for the UI update
+      const uiBpm = currentBpmRef.current
+      const uiMeasure = measureInCycleRef.current
+      const uiTotal = totalMeasuresRef.current
+
       setTimeout(() => {
         if (!isPlayingRef.current) return
         setCurrentBeat(beat)
+        setCurrentBpm(uiBpm)
+        setMeasureInCycle(uiMeasure)
+        setTotalMeasures(uiTotal)
       }, delay)
 
+      // Advance to next beat
       const nextBeat = beat + 1
       if (nextBeat >= BEATS_PER_MEASURE) {
         currentBeatRef.current = 0
@@ -452,20 +468,6 @@ function App() {
 
         if (measureInCycleRef.current >= MEASURES_PER_BUMP) {
           measureInCycleRef.current = 0
-          const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
-          currentBpmRef.current = newBpm
-          setTimeout(() => {
-            if (!isPlayingRef.current) return
-            setCurrentBpm(newBpm)
-            setMeasureInCycle(0)
-            setTotalMeasures(totalMeasuresRef.current)
-          }, delay)
-        } else {
-          setTimeout(() => {
-            if (!isPlayingRef.current) return
-            setMeasureInCycle(measureInCycleRef.current)
-            setTotalMeasures(totalMeasuresRef.current)
-          }, delay)
         }
       } else {
         currentBeatRef.current = nextBeat
