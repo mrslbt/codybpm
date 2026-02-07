@@ -26,7 +26,14 @@ const SUBDIVISIONS = [
 const MEASURES_PER_CYCLE = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
-const BPM_BUMP_INTERVAL = 10 // seconds before BPM increment becomes eligible
+const BUMP_INTERVALS = [
+  { label: '5s', value: 5 },
+  { label: '10s', value: 10 },
+  { label: '15s', value: 15 },
+  { label: '20s', value: 20 },
+  { label: '30s', value: 30 },
+  { label: '60s', value: 60 },
+]
 
 // Generate a smooth ECG PQRST waveform cycle (normalized -1 to 1)
 function generateECGCycle(numPoints: number): number[] {
@@ -107,6 +114,8 @@ function App() {
   const [selectedIncrement, setSelectedIncrement] = useState(3) // default +5
   const [selectedTimeSig, setSelectedTimeSig] = useState(0) // default 4/4
   const [selectedSubdiv, setSelectedSubdiv] = useState(0)   // default quarter
+  const [selectedInterval, setSelectedInterval] = useState(1) // default 10s
+  const [countdown, setCountdown] = useState(0) // seconds until next BPM bump
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
@@ -129,6 +138,7 @@ function App() {
   const beatsPerMeasureRef = useRef(TIME_SIGNATURES[0].beats)
   const subdivRef = useRef(SUBDIVISIONS[0].perBeat)
   const currentSubRef = useRef(0) // subdivision position within a beat
+  const bumpIntervalRef = useRef(BUMP_INTERVALS[1].value) // 10s default
   // Time-based BPM increment tracking
   const lastBpmBumpTimeRef = useRef(0) // AudioContext time of last BPM bump
   const totalPausedDurationRef = useRef(0) // accumulated paused time
@@ -139,6 +149,7 @@ function App() {
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
   useEffect(() => { beatsPerMeasureRef.current = TIME_SIGNATURES[selectedTimeSig].beats }, [selectedTimeSig])
   useEffect(() => { subdivRef.current = SUBDIVISIONS[selectedSubdiv].perBeat }, [selectedSubdiv])
+  useEffect(() => { bumpIntervalRef.current = BUMP_INTERVALS[selectedInterval].value }, [selectedInterval])
 
   // ECG canvas animation refs
   const wavePhaseRef = useRef(0)
@@ -478,9 +489,9 @@ function App() {
       const isDownbeat = beat === 0 && isMainBeat
       const isCycleStart = isDownbeat && measureInCycleRef.current === 0
 
-      // Mark bump as ready once 10 seconds of active playing time have elapsed
+      // Mark bump as ready once the interval of active playing time has elapsed
       const activeTime = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
-      if (activeTime >= BPM_BUMP_INTERVAL) {
+      if (activeTime >= bumpIntervalRef.current) {
         bpmBumpReadyRef.current = true
       }
 
@@ -554,13 +565,19 @@ function App() {
       totalPausedDurationRef.current += audioCtxRef.current.currentTime - pauseStartTimeRef.current
       nextNoteTimeRef.current = audioCtxRef.current.currentTime
       lastFrameTimeRef.current = performance.now()
-      // Restart elapsed timer
+      // Restart elapsed timer + countdown
       elapsedTimerRef.current = window.setInterval(() => {
         if (!isPlayingRef.current || isPausedRef.current) return
         const ctx = audioCtxRef.current
         if (!ctx) return
         const active = ctx.currentTime - totalPausedDurationRef.current
         setElapsedTime(Math.floor(active))
+        // Countdown to next BPM bump
+        const timeSinceLastBump = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
+        const remaining = bpmBumpReadyRef.current
+          ? 0
+          : Math.max(0, Math.ceil(bumpIntervalRef.current - timeSinceLastBump))
+        setCountdown(remaining)
       }, 250)
       scheduleNote()
       animateWaveform()
@@ -604,6 +621,7 @@ function App() {
     setCurrentBeat(-1)
     setTotalMeasures(0)
     setElapsedTime(0)
+    setCountdown(bumpIntervalRef.current)
     setCurrentBpm(bpm)
 
     isPlayingRef.current = true
@@ -611,7 +629,7 @@ function App() {
     setIsPlaying(true)
     setIsPaused(false)
 
-    // Start elapsed time display timer
+    // Start elapsed time display timer + countdown
     if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
     elapsedTimerRef.current = window.setInterval(() => {
       if (!isPlayingRef.current || isPausedRef.current) return
@@ -619,6 +637,12 @@ function App() {
       if (!actx) return
       const active = actx.currentTime - totalPausedDurationRef.current
       setElapsedTime(Math.floor(active))
+      // Countdown to next BPM bump
+      const timeSinceLastBump = actx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
+      const remaining = bpmBumpReadyRef.current
+        ? 0
+        : Math.max(0, Math.ceil(bumpIntervalRef.current - timeSinceLastBump))
+      setCountdown(remaining)
     }, 250)
 
     scheduleNote()
@@ -667,6 +691,7 @@ function App() {
     setCurrentBeat(-1)
     setTotalMeasures(0)
     setElapsedTime(0)
+    setCountdown(0)
     const bpmVal = parseInt(startBpmInput, 10) || DEFAULT_BPM
     setCurrentBpm(bpmVal)
   }, [startBpmInput, stopWaveform])
@@ -732,12 +757,12 @@ function App() {
 
         <div className="screen-footer">
           <span>{isPlaying ? formatTime(elapsedTime) : `Bar 1`}</span>
-          <span>{isPlaying ? `+${currentIncrement} / ${BPM_BUMP_INTERVAL}s` : `Start: ${startBpm}`}</span>
+          <span>{isPlaying ? `Next +${currentIncrement} in ${countdown}s` : `Start: ${startBpm}`}</span>
         </div>
       </div>
 
       {/* Settings */}
-      <div className="settings-row">
+      <div className="settings-row settings-row-3">
         <div className="setting-group">
           <div className="setting-label">Start BPM</div>
           <div className="bpm-input-wrap">
@@ -786,6 +811,22 @@ function App() {
                 disabled={isPlaying}
               >
                 <span className="setting-btn-value">+{inc.value}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setting-group">
+          <div className="setting-label">Interval</div>
+          <div className="setting-grid">
+            {BUMP_INTERVALS.map((bi, i) => (
+              <button
+                key={i}
+                className={`setting-btn ${selectedInterval === i ? 'selected' : ''}`}
+                onClick={() => { if (!isPlaying) setSelectedInterval(i) }}
+                disabled={isPlaying}
+              >
+                <span className="setting-btn-value">{bi.label}</span>
               </button>
             ))}
           </div>
@@ -849,7 +890,7 @@ function App() {
 
       <div className="bottom-labels">
         <span className="bottom-label">Progressive Metronome</span>
-        <span className="bottom-label">+{currentIncrement} BPM / {BPM_BUMP_INTERVAL}s</span>
+        <span className="bottom-label">+{currentIncrement} BPM / {BUMP_INTERVALS[selectedInterval].value}s</span>
       </div>
 
       <div className="brand-mark">

@@ -263,6 +263,11 @@
   animation-delay: 0.6s;
 }
 
+.settings-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .setting-group {
   flex: 1;
   background: linear-gradient(180deg, #141417, #111114);
