@@ -11,9 +11,10 @@ const INCREMENTS = [
 ]
 
 const BEATS_PER_MEASURE = 4
+const MEASURES_PER_CYCLE = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
-const BPM_BUMP_INTERVAL = 10 // seconds between BPM increments
+const BPM_BUMP_INTERVAL = 10 // seconds before BPM increment becomes eligible
 
 // Generate a smooth ECG PQRST waveform cycle (normalized -1 to 1)
 function generateECGCycle(numPoints: number): number[] {
@@ -105,6 +106,7 @@ function App() {
   const timerRef = useRef<number | null>(null)
   const nextNoteTimeRef = useRef(0)
   const currentBeatRef = useRef(0)
+  const measureInCycleRef = useRef(0)
   const totalMeasuresRef = useRef(0)
   const currentBpmRef = useRef(DEFAULT_BPM)
   const isPlayingRef = useRef(false)
@@ -114,6 +116,7 @@ function App() {
   const lastBpmBumpTimeRef = useRef(0) // AudioContext time of last BPM bump
   const totalPausedDurationRef = useRef(0) // accumulated paused time
   const pauseStartTimeRef = useRef(0) // when the current pause started
+  const bpmBumpReadyRef = useRef(false) // true once 10s elapsed, waiting for cycle start
   const elapsedTimerRef = useRef<number | null>(null) // interval for elapsed display
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
@@ -442,14 +445,21 @@ function App() {
     while (nextNoteTimeRef.current < ctx.currentTime + lookahead) {
       const beat = currentBeatRef.current
       const isDownbeat = beat === 0
+      const isCycleStart = isDownbeat && measureInCycleRef.current === 0
 
-      // Time-based BPM increment: check if 10 seconds of playing time have elapsed
+      // Mark bump as ready once 10 seconds of active playing time have elapsed
       const activeTime = ctx.currentTime - lastBpmBumpTimeRef.current - totalPausedDurationRef.current
       if (activeTime >= BPM_BUMP_INTERVAL) {
+        bpmBumpReadyRef.current = true
+      }
+
+      // Apply BPM bump only on the first beat of a new 4-bar cycle
+      if (bpmBumpReadyRef.current && isCycleStart && totalMeasuresRef.current > 0) {
         const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
         currentBpmRef.current = newBpm
-        // Reset bump timer — account for overshoot so timing stays consistent
-        lastBpmBumpTimeRef.current += BPM_BUMP_INTERVAL + totalPausedDurationRef.current
+        bpmBumpReadyRef.current = false
+        // Reset bump timer from current time
+        lastBpmBumpTimeRef.current = ctx.currentTime
         totalPausedDurationRef.current = 0
       }
 
@@ -472,7 +482,11 @@ function App() {
       const nextBeat = beat + 1
       if (nextBeat >= BEATS_PER_MEASURE) {
         currentBeatRef.current = 0
+        measureInCycleRef.current += 1
         totalMeasuresRef.current += 1
+        if (measureInCycleRef.current >= MEASURES_PER_CYCLE) {
+          measureInCycleRef.current = 0
+        }
       } else {
         currentBeatRef.current = nextBeat
       }
@@ -532,12 +546,14 @@ function App() {
 
     const bpm = Math.min(Math.max(startBpm, 1), MAX_BPM)
     currentBeatRef.current = 0
+    measureInCycleRef.current = 0
     totalMeasuresRef.current = 0
     currentBpmRef.current = bpm
     nextNoteTimeRef.current = ctx.currentTime
     lastBpmBumpTimeRef.current = ctx.currentTime
     totalPausedDurationRef.current = 0
     pauseStartTimeRef.current = 0
+    bpmBumpReadyRef.current = false
 
     setCurrentBeat(-1)
     setTotalMeasures(0)
