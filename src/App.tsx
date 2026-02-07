@@ -10,7 +10,19 @@ const INCREMENTS = [
   { label: 'F', value: 15 },
 ]
 
-const BEATS_PER_MEASURE = 4
+const TIME_SIGNATURES = [
+  { label: '4/4', beats: 4 },
+  { label: '3/4', beats: 3 },
+  { label: '6/8', beats: 6 },
+]
+
+const SUBDIVISIONS = [
+  { label: '1/4', perBeat: 1 },   // quarter notes (no subdivision)
+  { label: '1/8', perBeat: 2 },   // 8th notes
+  { label: 'Trip', perBeat: 3 },  // triplets
+  { label: '1/16', perBeat: 4 },  // 16th notes
+]
+
 const MEASURES_PER_CYCLE = 4
 const MAX_BPM = 300
 const DEFAULT_BPM = 60
@@ -93,6 +105,8 @@ function App() {
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
   const [selectedIncrement, setSelectedIncrement] = useState(3) // default +5
+  const [selectedTimeSig, setSelectedTimeSig] = useState(0) // default 4/4
+  const [selectedSubdiv, setSelectedSubdiv] = useState(0)   // default quarter
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
@@ -112,6 +126,9 @@ function App() {
   const isPlayingRef = useRef(false)
   const isPausedRef = useRef(false)
   const incrementRef = useRef(INCREMENTS[3].value)
+  const beatsPerMeasureRef = useRef(TIME_SIGNATURES[0].beats)
+  const subdivRef = useRef(SUBDIVISIONS[0].perBeat)
+  const currentSubRef = useRef(0) // subdivision position within a beat
   // Time-based BPM increment tracking
   const lastBpmBumpTimeRef = useRef(0) // AudioContext time of last BPM bump
   const totalPausedDurationRef = useRef(0) // accumulated paused time
@@ -120,6 +137,8 @@ function App() {
   const elapsedTimerRef = useRef<number | null>(null) // interval for elapsed display
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
+  useEffect(() => { beatsPerMeasureRef.current = TIME_SIGNATURES[selectedTimeSig].beats }, [selectedTimeSig])
+  useEffect(() => { subdivRef.current = SUBDIVISIONS[selectedSubdiv].perBeat }, [selectedSubdiv])
 
   // ECG canvas animation refs
   const wavePhaseRef = useRef(0)
@@ -421,15 +440,25 @@ function App() {
     return () => window.removeEventListener('resize', handleResize)
   }, [drawECG])
 
-  const playClick = useCallback((time: number, isDownbeat: boolean) => {
+  const playClick = useCallback((time: number, clickType: 'downbeat' | 'beat' | 'sub') => {
     const ctx = audioCtxRef.current
     if (!ctx) return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain)
     gain.connect(ctx.destination)
-    osc.frequency.value = isDownbeat ? 1000 : 700
-    gain.gain.setValueAtTime(0.8, time)
+
+    if (clickType === 'downbeat') {
+      osc.frequency.value = 1000
+      gain.gain.setValueAtTime(0.8, time)
+    } else if (clickType === 'beat') {
+      osc.frequency.value = 700
+      gain.gain.setValueAtTime(0.8, time)
+    } else {
+      osc.frequency.value = 500
+      gain.gain.setValueAtTime(0.4, time)
+    }
+
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08)
     osc.start(time)
     osc.stop(time + 0.08)
@@ -444,7 +473,9 @@ function App() {
 
     while (nextNoteTimeRef.current < ctx.currentTime + lookahead) {
       const beat = currentBeatRef.current
-      const isDownbeat = beat === 0
+      const sub = currentSubRef.current
+      const isMainBeat = sub === 0
+      const isDownbeat = beat === 0 && isMainBeat
       const isCycleStart = isDownbeat && measureInCycleRef.current === 0
 
       // Mark bump as ready once 10 seconds of active playing time have elapsed
@@ -458,41 +489,55 @@ function App() {
         const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
         currentBpmRef.current = newBpm
         bpmBumpReadyRef.current = false
-        // Reset bump timer from current time
         lastBpmBumpTimeRef.current = ctx.currentTime
         totalPausedDurationRef.current = 0
       }
 
-      playClick(nextNoteTimeRef.current, isDownbeat)
+      // Determine click type
+      const clickType: 'downbeat' | 'beat' | 'sub' = isDownbeat
+        ? 'downbeat'
+        : isMainBeat
+          ? 'beat'
+          : 'sub'
+      playClick(nextNoteTimeRef.current, clickType)
 
       const delay = Math.max(0, (nextNoteTimeRef.current - ctx.currentTime) * 1000)
 
-      // Capture current state for the UI update
-      const uiBpm = currentBpmRef.current
-      const uiTotal = totalMeasuresRef.current
+      // Only update UI beat indicators on main beats (not subdivisions)
+      if (isMainBeat) {
+        const uiBpm = currentBpmRef.current
+        const uiTotal = totalMeasuresRef.current
+        const uiBeat = beat
 
-      setTimeout(() => {
-        if (!isPlayingRef.current) return
-        setCurrentBeat(beat)
-        setCurrentBpm(uiBpm)
-        setTotalMeasures(uiTotal)
-      }, delay)
+        setTimeout(() => {
+          if (!isPlayingRef.current) return
+          setCurrentBeat(uiBeat)
+          setCurrentBpm(uiBpm)
+          setTotalMeasures(uiTotal)
+        }, delay)
+      }
 
-      // Advance to next beat
-      const nextBeat = beat + 1
-      if (nextBeat >= BEATS_PER_MEASURE) {
-        currentBeatRef.current = 0
-        measureInCycleRef.current += 1
-        totalMeasuresRef.current += 1
-        if (measureInCycleRef.current >= MEASURES_PER_CYCLE) {
-          measureInCycleRef.current = 0
+      // Advance subdivision
+      currentSubRef.current += 1
+      if (currentSubRef.current >= subdivRef.current) {
+        currentSubRef.current = 0
+        // Advance beat
+        const nextBeat = beat + 1
+        if (nextBeat >= beatsPerMeasureRef.current) {
+          currentBeatRef.current = 0
+          measureInCycleRef.current += 1
+          totalMeasuresRef.current += 1
+          if (measureInCycleRef.current >= MEASURES_PER_CYCLE) {
+            measureInCycleRef.current = 0
+          }
+        } else {
+          currentBeatRef.current = nextBeat
         }
-      } else {
-        currentBeatRef.current = nextBeat
       }
 
       const secondsPerBeat = 60.0 / currentBpmRef.current
-      nextNoteTimeRef.current += secondsPerBeat
+      const secondsPerTick = secondsPerBeat / subdivRef.current
+      nextNoteTimeRef.current += secondsPerTick
     }
 
     timerRef.current = window.setTimeout(scheduleNote, scheduleInterval)
@@ -546,6 +591,7 @@ function App() {
 
     const bpm = Math.min(Math.max(startBpm, 1), MAX_BPM)
     currentBeatRef.current = 0
+    currentSubRef.current = 0
     measureInCycleRef.current = 0
     totalMeasuresRef.current = 0
     currentBpmRef.current = bpm
@@ -676,7 +722,7 @@ function App() {
 
         {/* Beat indicators */}
         <div className="beat-indicators">
-          {Array.from({ length: BEATS_PER_MEASURE }, (_, i) => (
+          {Array.from({ length: TIME_SIGNATURES[selectedTimeSig].beats }, (_, i) => (
             <div
               key={i}
               className={`beat-dot ${i === 0 ? 'downbeat' : ''} ${currentBeat === i ? 'active' : ''}`}
@@ -746,6 +792,41 @@ function App() {
         </div>
       </div>
 
+      {/* Time Signature & Subdivision */}
+      <div className="settings-row">
+        <div className="setting-group">
+          <div className="setting-label">Time Sig</div>
+          <div className="setting-grid">
+            {TIME_SIGNATURES.map((ts, i) => (
+              <button
+                key={i}
+                className={`setting-btn ${selectedTimeSig === i ? 'selected' : ''}`}
+                onClick={() => { if (!isPlaying) setSelectedTimeSig(i) }}
+                disabled={isPlaying}
+              >
+                <span className="setting-btn-value">{ts.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setting-group">
+          <div className="setting-label">Subdivision</div>
+          <div className="setting-grid setting-grid-4">
+            {SUBDIVISIONS.map((sd, i) => (
+              <button
+                key={i}
+                className={`setting-btn ${selectedSubdiv === i ? 'selected' : ''}`}
+                onClick={() => { if (!isPlaying) setSelectedSubdiv(i) }}
+                disabled={isPlaying}
+              >
+                <span className="setting-btn-value">{sd.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Transport Controls */}
       <div className="transport">
         <button className="transport-btn" onClick={start} disabled={isPlaying && !isPaused}>
@@ -776,7 +857,7 @@ function App() {
       </div>
 
       <div className="made-in">made in fukuoka</div>
-      <div className="credit">@bymarselb</div>
+      <div className="credit">a cody, yohei and marsel collab</div>
     </div>
   )
 }

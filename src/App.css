@@ -289,6 +289,10 @@
   gap: 4px;
 }
 
+.setting-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .setting-btn {
   background: #1a1a1e;
   border: 1px solid #2a2a2e;
