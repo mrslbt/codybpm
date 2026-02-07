@@ -283,15 +283,13 @@
   margin-bottom: 8px;
 }
 
-.setting-buttons {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
+.setting-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
 }
 
 .setting-btn {
-  flex: 1 0 auto;
-  min-width: 0;
   background: #1a1a1e;
   border: 1px solid #2a2a2e;
   border-radius: 6px;
@@ -323,10 +321,10 @@
 
 .setting-btn-value {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #555;
-  letter-spacing: 0;
+  letter-spacing: 0.5px;
 }
 
 .setting-btn.selected .setting-btn-value {

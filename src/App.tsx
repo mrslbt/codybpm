@@ -632,9 +632,8 @@ function App() {
         </div>
       </div>
 
-      {/* Settings Row */}
+      {/* Settings */}
       <div className="settings-row">
-        {/* Start BPM */}
         <div className="setting-group">
           <div className="setting-label">Start BPM</div>
           <div className="bpm-input-wrap">
@@ -668,10 +667,9 @@ function App() {
           </div>
         </div>
 
-        {/* Increment */}
         <div className="setting-group">
           <div className="setting-label">Increment</div>
-          <div className="setting-buttons">
+          <div className="setting-grid">
             {INCREMENTS.map((inc, i) => (
               <button
                 key={i}
