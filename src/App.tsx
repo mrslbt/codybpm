@@ -2,9 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 
 const INCREMENTS = [
-  { label: 'A', value: 5 },
-  { label: 'B', value: 10 },
-  { label: 'C', value: 15 },
+  { label: 'A', value: 1 },
+  { label: 'B', value: 2 },
+  { label: 'C', value: 3 },
+  { label: 'D', value: 5 },
+  { label: 'E', value: 10 },
+  { label: 'F', value: 15 },
 ]
 
 const BEATS_PER_MEASURE = 4
@@ -88,7 +91,7 @@ function sampleECGWithVariation(t: number, v: BeatVariation): number {
 function App() {
   const [startBpmInput, setStartBpmInput] = useState(String(DEFAULT_BPM))
   const startBpm = parseInt(startBpmInput, 10) || DEFAULT_BPM
-  const [selectedIncrement, setSelectedIncrement] = useState(1)
+  const [selectedIncrement, setSelectedIncrement] = useState(3) // default +5
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
@@ -107,7 +110,7 @@ function App() {
   const currentBpmRef = useRef(DEFAULT_BPM)
   const isPlayingRef = useRef(false)
   const isPausedRef = useRef(false)
-  const incrementRef = useRef(INCREMENTS[1].value)
+  const incrementRef = useRef(INCREMENTS[3].value)
 
   useEffect(() => { incrementRef.current = INCREMENTS[selectedIncrement].value }, [selectedIncrement])
 
