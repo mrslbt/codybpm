@@ -96,7 +96,7 @@ function App() {
   const [isPaused, setIsPaused] = useState(false)
   const [currentBpm, setCurrentBpm] = useState(DEFAULT_BPM)
   const [currentBeat, setCurrentBeat] = useState(-1)
-  const [measureInCycle, setMeasureInCycle] = useState(0)
+  const [_measureInCycle, setMeasureInCycle] = useState(0)
   const [_totalMeasures, setTotalMeasures] = useState(0)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -439,8 +439,8 @@ function App() {
       const beat = currentBeatRef.current
       const isDownbeat = beat === 0
 
-      // BPM change happens on the first beat of a new cycle
-      if (isDownbeat && measureInCycleRef.current === 0 && totalMeasuresRef.current > 0) {
+      // BPM change happens on the first beat of every bar (except the very first)
+      if (isDownbeat && totalMeasuresRef.current > 0) {
         const newBpm = Math.min(currentBpmRef.current + incrementRef.current, MAX_BPM)
         currentBpmRef.current = newBpm
       }
@@ -627,8 +627,8 @@ function App() {
         </div>
 
         <div className="screen-footer">
-          <span>Measure {measureInCycle + 1}/{MEASURES_PER_BUMP}</span>
-          <span>{isPlaying ? `+${currentIncrement} / ${MEASURES_PER_BUMP} bars` : `Start: ${startBpm}`}</span>
+          <span>Bar {_totalMeasures + 1}</span>
+          <span>{isPlaying ? `+${currentIncrement} / bar` : `Start: ${startBpm}`}</span>
         </div>
       </div>
 
@@ -710,7 +710,7 @@ function App() {
 
       <div className="bottom-labels">
         <span className="bottom-label">Progressive Metronome</span>
-        <span className="bottom-label">+{currentIncrement} BPM / {MEASURES_PER_BUMP} bars</span>
+        <span className="bottom-label">+{currentIncrement} BPM / bar</span>
       </div>
 
       <div className="brand-mark">
