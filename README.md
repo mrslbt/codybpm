@@ -56,4 +56,4 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## Built by
 
-A Cody, Yohei, and Marsel collaboration — made in Fukuoka.
+A Cody, Yohei, and @bymarselb collaboration — made in Fukuoka.
