@@ -1,73 +1,59 @@
-# React + TypeScript + Vite
+# CodyBPM — Progressive Metronome
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## What is CodyBPM?
 
-Currently, two official plugins are available:
+CodyBPM is a browser-based metronome designed for musicians who practice with progressive tempo training. Instead of manually bumping the BPM every few bars, CodyBPM does it for you — automatically increasing the tempo at timed intervals so you can stay focused on your instrument.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Set your starting BPM, pick how much to increase and how often, hit play, and let CodyBPM push your speed limits while you practice.
 
-## React Compiler
+## Why?
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Every musician has hit the wall where a passage feels impossible at full speed. The standard advice is always the same: start slow, gradually speed up. But constantly reaching for a metronome dial breaks your flow. CodyBPM automates that process — you set the rules, it handles the tempo, and you just play.
 
-## Expanding the ESLint configuration
+## How It Works
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. **Set your starting BPM** (1-300)
+2. **Choose an increment** — how many BPM to add each bump (+1, +2, +3, +5, +10, or +15)
+3. **Choose an interval** — how often the bump happens (every 5s, 10s, 15s, 20s, 30s, or 60s)
+4. **Pick your time signature** — 4/4, 3/4, or 6/8
+5. **Pick subdivisions** — quarter notes, 8th notes, triplets, or 16th notes
+6. **Press Play** — the tempo increases automatically, always landing on the downbeat of a new bar
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+A progress bar and countdown timer show you exactly when the next bump is coming. The current BPM, elapsed time, and bar count are all visible on the display.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## The Interface
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+CodyBPM is styled to look and feel like a piece of physical audio hardware — dark metallic shell, engraved labels, CRT-style scanlines, and a power-on boot animation. The top of the device features an ECG heart-monitor waveform that pulses in sync with the beat, complete with phosphor trails and a sweep cursor.
+
+## Features
+
+- **Progressive tempo training** — automatic BPM increases on the downbeat
+- **Time signatures** — 4/4, 3/4, 6/8
+- **Subdivisions** — quarter, 8th, triplet, 16th
+- **ECG beat visualizer** — heart-monitor waveform synced to every click
+- **Distinct click tones** — different frequencies for downbeats (1000 Hz), beats (700 Hz), and subdivisions (500 Hz)
+- **Pause & resume** — pausing freezes the timer; resuming picks up exactly where you left off
+- **Mobile-ready** — iOS silent mode workaround and AudioContext unlock built in
+- **No dependencies beyond React** — all audio and visuals are built with native Web Audio API and Canvas
+
+## Getting Started
+
+```bash
+git clone https://github.com/mrslbt/codybpm.git
+cd codybpm
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Tech Stack
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- React 19 + TypeScript
+- Vite
+- Web Audio API (sample-accurate scheduling via `AudioContext` + `OscillatorNode`)
+- Canvas API (ECG waveform rendering with phosphor/scanline effects)
+
+## Built by
+
+A Cody, Yohei, and Marsel collaboration — made in Fukuoka.
